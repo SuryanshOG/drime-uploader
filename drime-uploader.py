@@ -37,9 +37,9 @@ if upload_btn and cdn_url:
 
         upload_json = upload_res.json()
         if upload_res.status_code != 200 or upload_json.get("status") != "success":
-        st.error(f"Upload failed: {upload_json}")
-        os.remove(filename)
-        st.stop()
+            st.error(f"Upload failed: {upload_json}")
+            os.remove(filename)
+            st.stop()
 
         file_info = upload_json.get("fileEntry")
         entry_id = file_info.get("id")
