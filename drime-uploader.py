@@ -35,12 +35,13 @@ if upload_btn and cdn_url:
             files = {'file': (filename, file_data)}
             upload_res = requests.post("https://app.drime.cloud/api/v1/uploads", headers=headers, files=files)
 
-        if upload_res.status_code != 200:
-            st.error(f"Upload failed: {upload_res.text}")
-            os.remove(filename)
-            st.stop()
+        upload_json = upload_res.json()
+        if upload_res.status_code != 200 or upload_json.get("status") != "success":
+        st.error(f"Upload failed: {upload_json}")
+        os.remove(filename)
+        st.stop()
 
-        file_info = upload_res.json()
+        file_info = upload_json.get("fileEntry")
         entry_id = file_info.get("id")
         st.success("File uploaded to Drime successfully.")
 
