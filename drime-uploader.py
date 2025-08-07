@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import os
+import mimetypes
 
 st.set_page_config(page_title="Drime CDN Uploader", layout="centered")
 st.title("🚀 Upload File to Drime from a CDN URL")
@@ -28,10 +29,16 @@ if st.button("Upload to Drime") and cdn_url:
                     f.write(chunk)
         st.success(f"✅ Downloaded `{filename}` successfully.")
 
-        # Step 2: Upload to Drime
+        # Step 2: Detect MIME type
+        mime_type, _ = mimetypes.guess_type(filename)
+        if not mime_type:
+            mime_type = "application/octet-stream"
+        st.write(f"Detected MIME type: `{mime_type}`")
+
+        # Step 3: Upload to Drime
         st.info("Uploading to Drime...")
         with open(filename, 'rb') as file_data:
-            files = {'file': (filename, file_data)}
+            files = {'file': (filename, file_data, mime_type)}
             upload_res = requests.post("https://app.drime.cloud/api/v1/uploads", headers=headers, files=files)
 
         upload_data = upload_res.json()
@@ -43,7 +50,7 @@ if st.button("Upload to Drime") and cdn_url:
         entry_id = upload_data["fileEntry"]["id"]
         st.success("✅ File uploaded to Drime.")
 
-        # Step 3: Create shareable link
+        # Step 4: Create shareable link
         st.info("Creating shareable link...")
         share_res = requests.post(
             f"https://app.drime.cloud/api/v1/file-entries/{entry_id}/shareable-link",
@@ -54,6 +61,15 @@ if st.button("Upload to Drime") and cdn_url:
             share_url = share_res.json().get("url")
             st.success("✅ Shareable Link:")
             st.code(share_url)
+
+            # Optional: Preview media
+            if mime_type.startswith("video/"):
+                st.video(share_url)
+            elif mime_type.startswith("audio/"):
+                st.audio(share_url)
+            elif mime_type.startswith("image/"):
+                st.image(share_url)
+
         else:
             st.error(f"❌ Failed to create shareable link: {share_res.text}")
 
