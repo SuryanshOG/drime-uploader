@@ -6,13 +6,11 @@ import mimetypes
 st.set_page_config(page_title="Drime CDN Uploader", layout="centered")
 st.title("🚀 Upload File to Drime from a CDN URL")
 
-# 🔐 Get API token
 API_TOKEN = st.secrets.get("DRIME_API_TOKEN", os.getenv("DRIME_API_TOKEN"))
 if not API_TOKEN:
     st.error("❌ Missing Drime API token. Set it in Streamlit secrets or env vars.")
     st.stop()
 
-# 🌐 User input
 cdn_url = st.text_input("Paste the direct CDN/download URL of the file")
 
 if st.button("Upload to Drime") and cdn_url:
@@ -46,32 +44,16 @@ if st.button("Upload to Drime") and cdn_url:
             mime_type = "application/octet-stream"
         st.write(f"📄 Detected MIME type: `{mime_type}`")
 
-        # Step 3: Upload with progress
+        # Step 3: Upload to Drime (no progress bar)
         st.info("📤 Uploading to Drime...")
-        file_size = os.path.getsize(filename)
-        uploaded = 0
-        upload_progress = st.progress(0, text="Uploading...")
+        with open(filename, 'rb') as file_data:
+            files = {'file': (filename, file_data, mime_type)}
+            upload_res = requests.post(
+                "https://app.drime.cloud/api/v1/uploads",
+                headers=headers,
+                files=files
+            )
 
-        def file_iterator(path, chunk_size=8192):
-            nonlocal uploaded
-            with open(path, 'rb') as f:
-                while True:
-                    chunk = f.read(chunk_size)
-                    if not chunk:
-                        break
-                    uploaded += len(chunk)
-                    percent = int(uploaded * 100 / file_size)
-                    upload_progress.progress(percent, text=f"Uploading... {percent}%")
-                    yield chunk
-
-        files = {'file': (filename, file_iterator(filename), mime_type)}
-        upload_res = requests.post(
-            "https://app.drime.cloud/api/v1/uploads",
-            headers=headers,
-            files=files
-        )
-
-        upload_progress.empty()
         upload_data = upload_res.json()
         if upload_res.status_code != 200 or upload_data.get("status") != "success":
             st.error(f"❌ Upload failed: {upload_data}")
