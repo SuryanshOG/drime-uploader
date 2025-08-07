@@ -6,13 +6,13 @@ import mimetypes
 st.set_page_config(page_title="Drime CDN Uploader", layout="centered")
 st.title("🚀 Upload File to Drime from a CDN URL")
 
-# 🔐 Get Drime API token
+# 🔐 Get API token
 API_TOKEN = st.secrets.get("DRIME_API_TOKEN", os.getenv("DRIME_API_TOKEN"))
 if not API_TOKEN:
-    st.error("❌ Missing Drime API token. Set it in Streamlit secrets or as an environment variable.")
+    st.error("❌ Missing Drime API token. Set it in Streamlit secrets or env vars.")
     st.stop()
 
-# 🌐 Input from user
+# 🌐 User input
 cdn_url = st.text_input("Paste the direct CDN/download URL of the file")
 
 if st.button("Upload to Drime") and cdn_url:
@@ -20,27 +20,58 @@ if st.button("Upload to Drime") and cdn_url:
     headers = {"Authorization": f"Bearer {API_TOKEN}"}
 
     try:
-        # Step 1: Download the file
-        st.info(f"Downloading `{filename}`...")
-        with requests.get(cdn_url, stream=True, timeout=60) as r:
-            r.raise_for_status()
-            with open(filename, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
+        # Step 1: Download with progress
+        st.info(f"📥 Downloading `{filename}`...")
+        r = requests.get(cdn_url, stream=True, timeout=60)
+        r.raise_for_status()
+        total_size = int(r.headers.get('content-length', 0))
+        chunk_size = 8192
+        downloaded = 0
+        progress_bar = st.progress(0, text="Downloading...")
+
+        with open(filename, 'wb') as f:
+            for chunk in r.iter_content(chunk_size=chunk_size):
+                if chunk:
                     f.write(chunk)
+                    downloaded += len(chunk)
+                    percent = int(downloaded * 100 / total_size)
+                    progress_bar.progress(percent, text=f"Downloading... {percent}%")
+
+        progress_bar.empty()
         st.success(f"✅ Downloaded `{filename}` successfully.")
 
-        # Step 2: Detect MIME type
+        # Step 2: Detect MIME
         mime_type, _ = mimetypes.guess_type(filename)
         if not mime_type:
             mime_type = "application/octet-stream"
-        st.write(f"Detected MIME type: `{mime_type}`")
+        st.write(f"📄 Detected MIME type: `{mime_type}`")
 
-        # Step 3: Upload to Drime
-        st.info("Uploading to Drime...")
-        with open(filename, 'rb') as file_data:
-            files = {'file': (filename, file_data, mime_type)}
-            upload_res = requests.post("https://app.drime.cloud/api/v1/uploads", headers=headers, files=files)
+        # Step 3: Upload with progress
+        st.info("📤 Uploading to Drime...")
+        file_size = os.path.getsize(filename)
+        uploaded = 0
+        upload_progress = st.progress(0, text="Uploading...")
 
+        def file_iterator(path, chunk_size=8192):
+            nonlocal uploaded
+            with open(path, 'rb') as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    uploaded += len(chunk)
+                    percent = int(uploaded * 100 / file_size)
+                    upload_progress.progress(percent, text=f"Uploading... {percent}%")
+                    yield chunk
+
+        files = {'file': (filename, file_iterator(filename), mime_type)}
+        upload_res = requests.post(
+            "https://app.drime.cloud/api/v1/uploads",
+            headers=headers,
+            files=files
+        )
+
+        upload_progress.empty()
         upload_data = upload_res.json()
         if upload_res.status_code != 200 or upload_data.get("status") != "success":
             st.error(f"❌ Upload failed: {upload_data}")
@@ -51,7 +82,7 @@ if st.button("Upload to Drime") and cdn_url:
         st.success("✅ File uploaded to Drime.")
 
         # Step 4: Create shareable link
-        st.info("Creating shareable link...")
+        st.info("🔗 Creating shareable link...")
         share_res = requests.post(
             f"https://app.drime.cloud/api/v1/file-entries/{entry_id}/shareable-link",
             headers=headers
@@ -62,14 +93,13 @@ if st.button("Upload to Drime") and cdn_url:
             st.success("✅ Shareable Link:")
             st.code(share_url)
 
-            # Optional: Preview media
+            # Preview
             if mime_type.startswith("video/"):
                 st.video(share_url)
             elif mime_type.startswith("audio/"):
                 st.audio(share_url)
             elif mime_type.startswith("image/"):
                 st.image(share_url)
-
         else:
             st.error(f"❌ Failed to create shareable link: {share_res.text}")
 
